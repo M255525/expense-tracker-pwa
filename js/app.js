@@ -297,20 +297,44 @@ function startScanFlow(draft, onFilled) {
   const video = document.getElementById('scan-video');
   const hint = document.getElementById('scan-hint');
   const closeBtn = document.getElementById('scan-close');
-  overlay.style.display = 'flex';
-  hint.textContent = '將電子發票左側 QR Code 對準框內';
+  const statusEl = document.getElementById('scan-status');
+  const statusText = document.getElementById('scan-status-text');
+  const retryBtn = document.getElementById('scan-retry');
+  const manualBtn = document.getElementById('scan-manual');
 
-  const cleanup = () => { Scanner.stop(); overlay.style.display = 'none'; closeBtn.onclick = null; };
-  closeBtn.onclick = cleanup;
+  overlay.style.display = 'flex';
+  hint.textContent = '正在啟動相機…若瀏覽器跳出相機權限詢問，請點「允許」';
+  statusEl.style.display = 'none';
+
+  const fullyClose = () => {
+    Scanner.stop();
+    overlay.style.display = 'none';
+    statusEl.style.display = 'none';
+    closeBtn.onclick = null;
+    retryBtn.onclick = null;
+    manualBtn.onclick = null;
+  };
+  closeBtn.onclick = fullyClose;
+  manualBtn.onclick = fullyClose;
+
+  // 錯誤/掃到非發票格式時，訊息直接顯示在這個黑底疊層裡（不用 toast——
+  // toast 疊在純黑背景上很容易看不清楚，之前手機上「一閃就消失」多半是這個原因）
+  // 且不會自動關閉鏡頭畫面，讓使用者看得到原因、自己選要重試還是改手動輸入。
+  const showStatus = (message) => {
+    Scanner.stop();
+    statusText.textContent = message;
+    statusEl.style.display = 'flex';
+    retryBtn.onclick = () => { retryBtn.onclick = null; startScanFlow(draft, onFilled); };
+  };
 
   Scanner.start(video, async (result) => {
-    cleanup();
-    if (!result.ok) { toast('掃描失敗，請改用手動輸入'); return; }
+    if (!result.ok) { showStatus('掃描失敗，請改用手動輸入'); return; }
     const parsed = InvoiceParser.parseInvoiceQR(result.raw);
     if (!parsed.ok) {
-      toast('這不是可辨識的電子發票 QR Code，請改用手動輸入');
+      showStatus('這不是可辨識的電子發票 QR Code，請確認掃的是發票左側的條碼，或改用手動輸入');
       return;
     }
+    fullyClose();
     const d = parsed.data;
     draft.amount = String(d.totalAmount);
     draft.date = d.date;
@@ -322,9 +346,10 @@ function startScanFlow(draft, onFilled) {
     if (d.items && d.items.length && !draft.merchant) draft.merchant = d.items[0].name;
     toast('發票資料已帶入，請確認分類後儲存');
     onFilled();
+  }).then(() => {
+    hint.textContent = '將電子發票左側 QR Code 對準框內';
   }).catch((err) => {
-    cleanup();
-    toast('無法開啟相機：' + err.message);
+    showStatus(err.message || '無法開啟相機，請改用手動輸入');
   });
 }
 

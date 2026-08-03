@@ -32,6 +32,13 @@
   <div class="scan-hint" id="scan-hint">將電子發票 QR Code 對準框內</div>
   <video id="scan-video" playsinline muted></video>
   <div class="scan-frame"></div>
+  <div id="scan-status" class="scan-status" style="display:none">
+    <p id="scan-status-text"></p>
+    <div class="scan-status-actions">
+      <button id="scan-retry" type="button">重試</button>
+      <button id="scan-manual" type="button">改用手動輸入</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast-container"></div>

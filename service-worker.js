@@ -2,7 +2,7 @@
 // CACHE_NAME on every deploy that changes any cached file — a stale
 // version number is the single most common bug class for this style of
 // app in this workspace (see ai-course-hub's ?v= cache-busting note).
-const CACHE_NAME = 'expense-tracker-v1';
+const CACHE_NAME = 'expense-tracker-v3';
 
 const SHELL_FILES = [
   './',
