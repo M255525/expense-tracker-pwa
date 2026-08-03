@@ -294,11 +294,36 @@ function buildForm(host, draft, existing) {
   host.appendChild(noteField);
 
   if (draft.source === 'invoice-qr' && draft.invoiceNumber) {
-    const items = (draft.items || []).map((it) => `${it.name} x${it.qty} @${it.unitPrice}`).join('、');
-    host.appendChild(el('div', { class: 'card' }, [
+    const invoiceCard = el('div', { class: 'card' }, [
       el('div', { class: 'muted-note' }, [`發票號碼：${draft.invoiceNumber}　賣方統編：${draft.sellerTaxId || '—'}`]),
-      items ? el('div', { class: 'muted-note' }, [`品項：${items}`]) : el('div', {}, []),
-    ]));
+    ]);
+    if (draft.items && draft.items.length) {
+      const table = el('table', { class: 'item-table' });
+      table.appendChild(el('thead', {}, [
+        el('tr', {}, [el('th', {}, ['品名']), el('th', {}, ['數量']), el('th', {}, ['單價']), el('th', {}, ['小計'])]),
+      ]));
+      const tbody = el('tbody', {});
+      let itemsTotal = 0;
+      for (const it of draft.items) {
+        const subtotal = (it.qty || 0) * (it.unitPrice || 0);
+        itemsTotal += subtotal;
+        tbody.appendChild(el('tr', {}, [
+          el('td', {}, [it.name || '—']),
+          el('td', {}, [String(it.qty ?? '—')]),
+          el('td', {}, [fmtTWD(it.unitPrice || 0)]),
+          el('td', {}, [fmtTWD(subtotal)]),
+        ]));
+      }
+      table.appendChild(tbody);
+      invoiceCard.appendChild(el('div', { class: 'section-title', style: 'margin-top:12px' }, ['發票品項']));
+      invoiceCard.appendChild(table);
+      if (Math.round(itemsTotal) !== Math.round(Number(draft.amount) || 0)) {
+        invoiceCard.appendChild(el('div', { class: 'muted-note' }, [`品項小計合計 ${fmtTWD(itemsTotal)}，與發票總金額不同——可能是這張發票的品項在掃描時沒有完全掃進來（例如還有右側品項明細 QR 沒掃），儲存時仍會用發票總金額為準。`]));
+      }
+    } else {
+      invoiceCard.appendChild(el('div', { class: 'muted-note' }, ['這張發票沒有品項明細（可能是簡易版QR或掃描時未包含品項資訊）。']));
+    }
+    host.appendChild(invoiceCard);
   }
 
   const saveBtn = el('button', { class: 'btn btn-primary', onclick: () => saveEntry(draft, existing) }, ['儲存']);

@@ -102,6 +102,21 @@ nav.bottom-nav a.active { color: var(--accent); }
   margin-bottom: 12px;
 }
 
+.item-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.item-table th, .item-table td {
+  padding: 6px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.item-table th { color: var(--text-muted); font-weight: 500; font-size: 12px; }
+.item-table th:first-child, .item-table td:first-child { text-align: left; }
+.item-table tr:last-child td { border-bottom: none; }
+
 .day-group { margin-bottom: 14px; }
 .day-group-header {
   display: flex;
