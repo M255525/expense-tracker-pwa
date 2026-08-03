@@ -126,6 +126,38 @@ nav.bottom-nav a.active { color: var(--accent); }
 .entry-amount { font-size: 14px; font-weight: 600; white-space: nowrap; }
 .entry-amount.income { color: var(--good); }
 .entry-amount.expense { color: var(--critical); }
+.entry-select-checkbox { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+
+.btn-select-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--chip-bg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.btn-selection-delete {
+  background: var(--critical);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
 
 .filter-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .filter-row select, .filter-row input[type="date"], .filter-row input[type="text"] {

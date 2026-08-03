@@ -101,6 +101,7 @@ async function renderList() {
   const catById = new Map(categories.map((c) => [c.id, c]));
 
   const state = { type: '', category: '', q: '' };
+  const selection = { active: false, ids: new Set() };
 
   const filterRow = el('div', { class: 'filter-row' });
   const typeSel = el('select', { onchange: (e) => { state.type = e.target.value; refresh(); } }, [
@@ -116,10 +117,44 @@ async function renderList() {
   filterRow.append(typeSel, catSel, searchInput);
   $main.appendChild(filterRow);
 
+  const selectToggleBtn = el('button', {
+    class: 'btn-select-toggle',
+    onclick: () => {
+      selection.active = !selection.active;
+      selection.ids.clear();
+      refresh();
+    },
+  }, ['選取']);
+  $main.appendChild(el('div', { style: 'text-align:right;margin-bottom:8px' }, [selectToggleBtn]));
+
+  const selectionBar = el('div', { class: 'selection-bar', style: 'display:none' });
+  $main.appendChild(selectionBar);
+
   const listContainer = el('div', {});
   $main.appendChild(listContainer);
 
+  function renderSelectionBar() {
+    selectToggleBtn.textContent = selection.active ? '取消選取' : '選取';
+    if (!selection.active) { selectionBar.style.display = 'none'; return; }
+    selectionBar.style.display = 'flex';
+    selectionBar.innerHTML = '';
+    selectionBar.appendChild(el('span', {}, [`已選 ${selection.ids.size} 筆`]));
+    selectionBar.appendChild(el('button', {
+      class: 'btn-selection-delete',
+      onclick: async () => {
+        if (selection.ids.size === 0) { toast('請先點選要刪除的紀錄'); return; }
+        if (!confirm(`確定要刪除選取的 ${selection.ids.size} 筆紀錄嗎？`)) return;
+        for (const id of selection.ids) await DB.softDeleteEntry(id);
+        toast(`已刪除 ${selection.ids.size} 筆`);
+        selection.active = false;
+        selection.ids.clear();
+        refresh();
+      },
+    }, ['刪除選取']));
+  }
+
   async function refresh() {
+    renderSelectionBar();
     listContainer.innerHTML = '';
     let entries = await DB.listEntries({ type: state.type || undefined, category: state.category || undefined });
     if (state.q) {
@@ -144,8 +179,23 @@ async function renderList() {
       ]));
       for (const entry of dayEntries) {
         const cat = catById.get(entry.category);
-        const row = el('div', { class: 'entry-row', onclick: () => { location.hash = `#/entry/${entry.id}`; } }, [
-          el('div', { class: 'entry-icon' }, [cat ? cat.icon : '❓']),
+        const checked = selection.ids.has(entry.id);
+        const leadingIcon = selection.active
+          ? el('input', { type: 'checkbox', class: 'entry-select-checkbox' })
+          : el('div', { class: 'entry-icon' }, [cat ? cat.icon : '❓']);
+        if (selection.active) leadingIcon.checked = checked;
+        const row = el('div', {
+          class: 'entry-row',
+          onclick: () => {
+            if (selection.active) {
+              if (checked) selection.ids.delete(entry.id); else selection.ids.add(entry.id);
+              refresh();
+            } else {
+              location.hash = `#/entry/${entry.id}`;
+            }
+          },
+        }, [
+          leadingIcon,
           el('div', { class: 'entry-main' }, [
             el('div', { class: 'entry-title' }, [entry.merchant || (cat ? cat.name : '未分類')]),
             el('div', { class: 'entry-sub' }, [[cat ? cat.name : '', entry.note].filter(Boolean).join(' · ') || ' ']),
@@ -373,9 +423,18 @@ async function renderCategories() {
           el('button', { onclick: async () => { if (i < cats.length - 1) { await swapOrder(cats[i + 1], c); refresh(); } } }, ['↓']),
           el('button', {
             onclick: async () => {
-              if (confirm(`封存分類「${c.name}」？（歷史紀錄仍會保留此分類）`)) { await DB.archiveCategory(c.id); refresh(); }
+              if (confirm(`封存分類「${c.name}」？（歷史紀錄仍會保留此分類，只是新增時不會再出現在選單裡）`)) { await DB.archiveCategory(c.id); refresh(); }
             },
           }, ['封存']),
+          el('button', {
+            onclick: async () => {
+              const inUse = await DB.listEntries({ category: c.id });
+              const warn = inUse.length > 0
+                ? `這個分類還有 ${inUse.length} 筆紀錄在用。刪除後這些紀錄會變成「未分類」，分類本身無法復原，確定要刪除嗎？`
+                : `確定要刪除分類「${c.name}」嗎？此動作無法復原。`;
+              if (confirm(warn)) { await DB.deleteCategory(c.id); toast('已刪除分類'); refresh(); }
+            },
+          }, ['刪除']),
         ]);
         listEl.appendChild(row);
       });

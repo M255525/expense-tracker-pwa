@@ -229,6 +229,18 @@ async function archiveCategory(id) {
   await txDone(tx);
 }
 
+// 真的從 categories store 移除（跟 archiveCategory 的隱藏不同）。呼叫前應該
+// 先用 listEntries({category:id}) 檢查還有沒有紀錄在用這個分類——刪除本身
+// 不會動那些紀錄，UI 端（entry-icon/entry-title）已經有「分類不存在時顯示
+// 未分類」的容錯，所以就算刪掉還在用的分類也不會壞掉，只是歷史紀錄會變成
+// 未分類，這個取捨要在呼叫端用確認對話框讓使用者知情。
+async function deleteCategory(id) {
+  const db = await openDB();
+  const tx = db.transaction('categories', 'readwrite');
+  tx.objectStore('categories').delete(id);
+  await txDone(tx);
+}
+
 // ---- settings ----
 
 async function getSetting(key) {
@@ -258,6 +270,7 @@ window.DB = {
   listCategories,
   putCategory,
   archiveCategory,
+  deleteCategory,
   getSetting,
   setSetting,
   DEFAULT_CATEGORIES,
