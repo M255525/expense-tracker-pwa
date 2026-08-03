@@ -50,7 +50,9 @@
 
 ## 預覽
 
-於本資料夾用靜態伺服器預覽（port 見 `.claude/launch.json`，目前登記為 8784）。**相機掃描與 PWA 安裝在區網 `http://` 下測不了**（`getUserMedia`/Service Worker 都需要 HTTPS 或 `localhost`）——列表/新增(手動)/分類/報表/設定等不需要相機的畫面可以在區網下正常測試。正式的手機端相機/安裝驗證，要等之後決定好 HTTPS 部署方式（例如 GitHub Pages）才能做。
+於本資料夾用靜態伺服器預覽（port 見 `.claude/launch.json`，目前登記為 8784）。**相機掃描與 PWA 安裝在區網 `http://` 下測不了**（`getUserMedia`/Service Worker 都需要 HTTPS 或 `localhost`）——列表/新增(手動)/分類/報表/設定等不需要相機的畫面可以在區網下正常測試。
+
+正式部署：GitHub Pages，公開 repo <https://github.com/M255525/expense-tracker-pwa>，網址 <https://m255525.github.io/expense-tracker-pwa/>（`main` 分支 `/` 根目錄）。手機端相機/安裝驗證要用這個網址（已確認是 secure context，`isSecureContext === true`，Service Worker 也已在此 scope 成功註冊）。repo 是公開的，但只有程式碼——記帳資料只存在使用者自己的 IndexedDB/Google Sheet，不會出現在 repo 裡。之後改動要記得 `git push`（GitHub Pages 會自動重新部署，通常數十秒內生效），並比照上面「Service Worker 快取」一節的規則升版 `CACHE_NAME`。
 
 ## 已知的範圍縮減（非遺漏，是刻意的取捨）
 
