@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>操作手冊｜隨手記帳</title>
+<style>
+  :root{
+    --accent:#2a78d6; --accent-dark:#184f95; --bg:#f4f6fb; --card:#ffffff;
+    --border:#dbe0ea; --text:#1f2937; --muted:#6b7280; --danger:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.9;
+  }
+  header{
+    background:linear-gradient(135deg,var(--accent-dark),var(--accent));
+    color:#fff; padding:22px 24px;
+  }
+  header h1{font-size:1.3rem; margin:0;}
+  header p{margin:4px 0 0; font-size:.85rem; opacity:.85;}
+  header a{
+    display:inline-block; margin-top:12px; color:#fff; text-decoration:none;
+    background:rgba(255,255,255,.15); padding:7px 16px; border-radius:6px; font-size:.85rem; font-weight:600;
+  }
+  header a:hover{background:rgba(255,255,255,.28);}
+  main{max-width:860px; margin:0 auto; padding:24px 16px 60px;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:20px 24px; margin-bottom:18px;
+  }
+  h2{
+    font-size:1.1rem; color:var(--accent-dark); margin:0 0 12px;
+    padding-bottom:8px; border-bottom:2px solid #eaf1fc;
+  }
+  h3{font-size:.95rem; color:var(--accent-dark); margin:18px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0; padding-left:24px;}
+  li{margin:4px 0;}
+  code{background:#eaf1fc; padding:1px 6px; border-radius:4px; font-size:.9em;}
+  .warning{
+    background:#fef2f2; border:1px solid #fca5a5; border-radius:8px;
+    padding:14px 18px; color:#991b1b; font-weight:600; margin-bottom:18px;
+  }
+  .warning small{display:block; font-weight:400; margin-top:6px; color:#b91c1c;}
+  .tip{
+    background:#eaf1fc; border-left:4px solid var(--accent); border-radius:0 8px 8px 0;
+    padding:10px 14px; font-size:.86rem; margin:10px 0;
+  }
+  .badge{
+    display:inline-block; background:#eaf1fc; color:var(--accent-dark);
+    border-radius:999px; padding:2px 12px; font-size:.78rem; font-weight:600; margin-right:6px;
+  }
+  footer{text-align:center; padding:18px; font-size:.78rem; color:var(--muted); line-height:1.8;}
+  footer a{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>操作手冊</h1>
+  <p>隨手記帳 — 手動記帳 ＋ 電子發票 QR Code 掃描記帳</p>
+  <a href="index.html">← 回到 App</a>
+</header>
+
+<main>
+
+<div class="warning">
+  ⚠ 這是一個離線優先的個人記帳工具，所有資料預設只存在你自己的手機瀏覽器裡。
+  <small>雲端同步/備份功能是選用的，需要你自己部署一組免費的 Google Sheet 後端才能使用，詳見本頁「雲端同步/備份」一節與 SETUP-GUIDE.md。</small>
+</div>
+
+<div class="card">
+  <h2>這是什麼工具？</h2>
+  <p>一個安裝在手機主畫面上使用的漸進式網頁應用（PWA），用來記帳。除了手動輸入之外，也可以用手機相機掃描台灣電子發票上的 QR Code，自動把金額、日期、發票號碼等資訊帶入記帳表單。</p>
+  <p>App 完全離線可用（新增/編輯/查詢/報表都不需要網路），相機掃描與雲端同步才需要網路連線。</p>
+</div>
+
+<div class="card">
+  <h2>安裝到手機主畫面</h2>
+  <ol>
+    <li>用手機的 Chrome 瀏覽器開啟 App 的網址。</li>
+    <li>點瀏覽器選單裡的「加入主畫面」，或 App 內「設定」頁籤的「加入主畫面」按鈕。</li>
+    <li>之後就會像一般 App 一樣有獨立圖示，開啟時不會看到瀏覽器網址列。</li>
+  </ol>
+  <div class="tip">💡 相機掃描與「加入主畫面」都需要 HTTPS 網址（或 <code>localhost</code>）才能使用，區域網路的 <code>http://</code> 網址無法呼叫相機。</div>
+</div>
+
+<div class="card">
+  <h2>手動記帳</h2>
+  <ol>
+    <li>底部點「新增」。</li>
+    <li>選「支出」或「收入」。</li>
+    <li>輸入金額、日期，選一個分類（emoji 卡片）。</li>
+    <li>商家/項目、備註可填可不填。</li>
+    <li>點「儲存」。</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2>掃描電子發票記帳</h2>
+  <ol>
+    <li>底部點「新增」，再點「📷 掃描電子發票 QR Code」。</li>
+    <li>把發票<strong>左側</strong>的 QR Code 對準框內，稍等自動辨識。</li>
+    <li>辨識成功後，金額、日期、發票號碼、賣方統編（若有品項也會一併帶入）會自動填入表單。</li>
+    <li>確認/補上分類，需要的話調整商家名稱，點「儲存」。</li>
+  </ol>
+  <div class="tip">💡 掃到的 QR Code 如果不是電子發票格式，會提示「無法辨識」並導向手動輸入，不會當機或卡住。</div>
+  <div class="tip">💡 同一張發票重複掃描存檔前會提醒「這張發票已經記過帳了」，但仍可選擇繼續存（例如部分退款的情況）。</div>
+</div>
+
+<div class="card">
+  <h2>列表與搜尋</h2>
+  <p>底部「列表」可依收支類型、分類篩選，也可以搜尋商家/備註關鍵字。紀錄依日期分組，點任一筆可以編輯或刪除。</p>
+</div>
+
+<div class="card">
+  <h2>分類管理</h2>
+  <p>「設定」頁籤裡的「管理分類」可以新增分類、調整排序、封存不再使用的分類。封存的分類不會出現在新增紀錄的選單裡，但歷史紀錄仍會正確顯示原本的分類。</p>
+</div>
+
+<div class="card">
+  <h2>報表</h2>
+  <p>底部「報表」選擇月份後，會看到當月收入/支出/淨額、支出分類佔比圖、每日收支趨勢圖。圖表下方都有「顯示表格」可以看原始數字。</p>
+</div>
+
+<div class="card">
+  <h2>雲端同步/備份（選用）</h2>
+  <p>預設資料只存在本機。想要「換手機不遺失資料」或想要一份雲端備份，可以照著 <code>SETUP-GUIDE.md</code> 的步驟，用你自己的 Google 帳號部署一組免費後端（Google Sheet + Apps Script），把網址填進「設定」頁籤即可。</p>
+  <p>這是「按一下才同步」的備份/還原機制，不是即時多裝置同步。</p>
+</div>
+
+<div class="card">
+  <h2>常見問題</h2>
+  <h3>相機打不開 / 沒有掃描畫面？</h3>
+  <p>檢查網址是否為 <code>https://</code> 開頭（或 <code>localhost</code>），並確認瀏覽器已授權相機權限。</p>
+  <h3>掃描一直辨識不出來？</h3>
+  <p>確認對準的是發票<strong>左側</strong>的 QR Code（不是右側的品項明細碼），並盡量保持對焦、光線充足。</p>
+  <h3>資料會不會外流？</h3>
+  <p>沒有設定雲端同步的話，所有資料只存在你自己的手機瀏覽器裡，不會傳到任何伺服器。設定雲端同步後，資料會存在你自己的 Google Sheet 裡，只有知道那組 Apps Script 網址的人才能存取。</p>
+</div>
+
+</main>
+
+<footer>
+  隨手記帳 — 個人記帳工具，僅供個人記帳與課程教學使用。
+</footer>
+
+</body>
+</html>

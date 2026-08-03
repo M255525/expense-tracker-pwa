@@ -1,0 +1,9 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# Editor
+.vscode/
+
+# Local test artifacts
+*.log
