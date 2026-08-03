@@ -465,50 +465,49 @@ async function renderReports() {
 // ---------------- Settings view ----------------
 
 async function renderSettings() {
-  const endpoint = (await DB.getSetting('syncEndpoint')) || '';
-  const lastSyncAt = await DB.getSetting('lastSyncAt');
+  const lastExportAt = await DB.getSetting('lastExportAt');
+  const lastImportAt = await DB.getSetting('lastImportAt');
 
-  const endpointInput = el('input', { type: 'text', placeholder: 'https://script.google.com/macros/s/.../exec', value: endpoint });
-  $main.appendChild(el('div', { class: 'section-title' }, ['雲端同步 / 備份']));
+  const fileInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    if (!confirm('匯入備份會把檔案裡的紀錄合併進目前的資料（同一筆以較新的為準，不會整個覆蓋），確定要匯入嗎？')) return;
+    try {
+      const r = await Backup.importBackup(file);
+      await DB.setSetting('lastImportAt', Date.now());
+      toast(`已匯入 ${r.entryCount} 筆紀錄、${r.categoryCount} 個分類`);
+      render();
+    } catch (err) {
+      toast('匯入失敗：' + err.message);
+    }
+  });
+
+  $main.appendChild(el('div', { class: 'section-title' }, ['備份 / 還原']));
   $main.appendChild(el('div', { class: 'card' }, [
-    el('div', { class: 'form-field' }, [el('label', {}, ['Apps Script 部署網址']), endpointInput]),
-    el('div', { class: 'muted-note' }, ['網址等同存取金鑰，請勿分享給不信任的人。部署步驟見 SETUP-GUIDE.md。']),
-    el('button', {
-      class: 'btn btn-secondary',
-      onclick: async () => { await DB.setSetting('syncEndpoint', endpointInput.value.trim()); toast('已儲存同步設定'); },
-    }, ['儲存網址']),
+    el('div', { class: 'muted-note' }, ['資料預設只存在這個裝置。按「匯出備份」會存成一個檔案，你可以自己存到 Google Drive、Dropbox 等雲端硬碟資料夾，或傳給自己保存。換手機時，用「匯入備份」把檔案讀回來即可。']),
     el('button', {
       class: 'btn btn-primary',
-      style: 'margin-top:8px',
-      onclick: async (e) => {
-        e.target.disabled = true;
+      style: 'margin-top:10px',
+      onclick: async () => {
         try {
-          const r = await Sync.syncNow();
-          toast(`同步完成：上傳 ${r.pushed} 筆、下載 ${r.pulled} 筆`);
+          const r = await Backup.exportBackup();
+          await DB.setSetting('lastExportAt', Date.now());
+          toast(`已匯出 ${r.count} 筆紀錄`);
           render();
         } catch (err) {
-          toast('同步失敗：' + err.message);
-        } finally {
-          e.target.disabled = false;
+          toast('匯出失敗：' + err.message);
         }
       },
-    }, ['立即同步']),
+    }, ['匯出備份']),
     el('button', {
       class: 'btn btn-secondary',
-      onclick: async (e) => {
-        if (!confirm('這會用雲端資料覆蓋本機較舊的紀錄，確定要完整還原嗎？')) return;
-        e.target.disabled = true;
-        try {
-          const r = await Sync.restoreAll();
-          toast(`已還原 ${r.pulled} 筆紀錄`);
-        } catch (err) {
-          toast('還原失敗：' + err.message);
-        } finally {
-          e.target.disabled = false;
-        }
-      },
-    }, ['從雲端完整還原（新裝置用）']),
-    el('div', { class: 'muted-note' }, [lastSyncAt ? `上次同步：${new Date(lastSyncAt).toLocaleString('zh-TW')}` : '尚未同步過']),
+      onclick: () => fileInput.click(),
+    }, ['匯入備份']),
+    fileInput,
+    el('div', { class: 'muted-note' }, [lastExportAt ? `上次匯出：${new Date(lastExportAt).toLocaleString('zh-TW')}` : '尚未匯出過']),
+    el('div', { class: 'muted-note' }, [lastImportAt ? `上次匯入：${new Date(lastImportAt).toLocaleString('zh-TW')}` : '尚未匯入過']),
   ]));
 
   $main.appendChild(el('div', { class: 'section-title' }, ['其他']));
