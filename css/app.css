@@ -94,6 +94,15 @@ nav.bottom-nav a {
 nav.bottom-nav a .icon { font-size: 20px; }
 nav.bottom-nav a.active { color: var(--accent); }
 
+/* 頂部跑馬燈（內容來自跟工作區其他工具共用的 Google Sheet「跑馬燈」檔案）。
+   #app 是 min-height:100vh 的 flex column、main 自己 overflow-y:auto 內部捲動，
+   所以這裡用 flex item 插進 #app 最上面，不用 position:fixed——這個殼層本來就
+   不會在 window 層級捲動，用 fixed 反而多一層不必要的疊層管理。 */
+#marqueeBar { flex: 0 0 auto; height: 28px; background: var(--surface); border-bottom: 1px solid var(--border); overflow: hidden; display: none; align-items: center; }
+#marqueeBar.show { display: flex; }
+#marqueeTrack { display: inline-block; white-space: nowrap; padding-left: 100%; font-size: 12px; font-weight: 600; color: var(--accent); animation: marquee-scroll 30s linear infinite; }
+@keyframes marquee-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
