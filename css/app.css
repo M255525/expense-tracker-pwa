@@ -344,6 +344,8 @@ nav.bottom-nav a.active { color: var(--accent); }
 
 .muted-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
+.about-credit { font-size: 12px; color: var(--text-secondary); margin-top: 10px; text-align: center; }
+
 .cat-manage-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .cat-manage-row .cat-name { flex: 1; }
 .cat-manage-row button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
