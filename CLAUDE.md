@@ -65,7 +65,11 @@
 
 **版面整合方式跟其他工具不同，是刻意的**：`#app` 是 `min-height:100vh` 的 flex column、`main` 自己 `overflow-y:auto` 內部捲動（body/window 本身不捲動），跟 `ai-video-studio` 那種單純頁面用 `position:fixed` + `body` 加 `padding-top` 的做法不一樣——這裡把 `#marqueeBar` 插進 `#app` 內、當 `header.topbar` 前面的一個普通 flex item（`flex:0 0 auto`），讓 flexbox 自然把 `header`／`main` 往下推。`header.topbar` 本身是 `position:sticky;top:0`，但因為它的捲動祖先（window）從不實際捲動，插入跑馬燈只是改變它在 flow 裡的靜態位置，不需要額外調整 sticky 的 `top` 偏移量。
 
-改了 `index.html`／`css/app.css` 之後記得比照「Service Worker 快取」一節升版 `CACHE_NAME`（已因這次改動升到 `expense-tracker-v8`）。
+改了 `index.html`／`css/app.css`／`js/app.js` 之後記得比照「Service Worker 快取」一節升版 `CACHE_NAME`（已因這次改動升到 `expense-tracker-v9`）。
+
+## 設定頁「關於」區塊（2026-08-05 新增）
+
+`js/app.js` 的 `renderSettings()` 最下面新增「關於」卡片：使用警語（僅供個人記帳與教學示範使用、資料僅存本機不上傳）＋「創作者：蔡豐全（Mark Tsai）」，比照工作區其他單檔工具（如 `Dashboard/index.html`）的 footer 慣例，但這裡放在設定頁而不是每個畫面都顯示的固定 footer——手機版面寸土寸金，且這個 App 是 hash routing 多畫面 SPA，不像其他工具是單頁工具、footer 只需顯示一次。
 
 ## 已知的範圍縮減（非遺漏，是刻意的取捨）
 
