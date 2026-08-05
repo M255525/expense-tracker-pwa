@@ -59,6 +59,14 @@
 
 正式部署：GitHub Pages，公開 repo <https://github.com/M255525/expense-tracker-pwa>，網址 <https://m255525.github.io/expense-tracker-pwa/>（`main` 分支 `/` 根目錄）。手機端相機/安裝驗證要用這個網址（已確認是 secure context，`isSecureContext === true`，Service Worker 也已在此 scope 成功註冊）。repo 是公開的，但只有程式碼——記帳資料只存在使用者自己的手機 IndexedDB（與自己另外存放的匯出備份檔），不會出現在 repo 裡。之後改動要記得 `git push`（GitHub Pages 會自動重新部署，通常數十秒內生效），並比照上面「Service Worker 快取」一節的規則升版 `CACHE_NAME`。
 
+## 頂部跑馬燈（2026-08-05 新增）
+
+`#marqueeBar` 顯示跟工作區其他工具（`ai-video-studio` 主版等）共用同一份 Google Sheet 維護的公告內容，同一個授權伺服器 Apps Script 網址（`AKfycbwKX0.../exec`）。這個 App **沒有序號登入機制**，所以做法是頁面載入時直接 POST 一個空序號給該網址——`doPost` 不論序號是否有效都會附上 `marquee` 陣列，前端只取這個欄位，忽略 `valid`/`reason`。`localStorage` key 為 `etpMarquee`，先讀快取立即顯示、再背景 fetch，每 20 分鐘重抓一次；抓取失敗靜默忽略（`catch(()=>{})`），不影響原本離線優先的記帳功能。跑馬燈維護方式：直接編輯共用的 Google Sheet 內容即可，不需要重新部署這個 App。
+
+**版面整合方式跟其他工具不同，是刻意的**：`#app` 是 `min-height:100vh` 的 flex column、`main` 自己 `overflow-y:auto` 內部捲動（body/window 本身不捲動），跟 `ai-video-studio` 那種單純頁面用 `position:fixed` + `body` 加 `padding-top` 的做法不一樣——這裡把 `#marqueeBar` 插進 `#app` 內、當 `header.topbar` 前面的一個普通 flex item（`flex:0 0 auto`），讓 flexbox 自然把 `header`／`main` 往下推。`header.topbar` 本身是 `position:sticky;top:0`，但因為它的捲動祖先（window）從不實際捲動，插入跑馬燈只是改變它在 flow 裡的靜態位置，不需要額外調整 sticky 的 `top` 偏移量。
+
+改了 `index.html`／`css/app.css` 之後記得比照「Service Worker 快取」一節升版 `CACHE_NAME`（已因這次改動升到 `expense-tracker-v8`）。
+
 ## 已知的範圍縮減（非遺漏，是刻意的取捨）
 
 - 沒有做拍照 OCR 記帳（`source:'receipt-photo'` 欄位有保留但沒實作）——電子發票 QR 掃描已經涵蓋主要情境，OCR 準確度不穩定且需要額外服務。
