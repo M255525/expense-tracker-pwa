@@ -71,6 +71,20 @@
 
 `js/app.js` 的 `renderSettings()` 最下面新增「關於」卡片：使用警語（僅供個人記帳與教學示範使用、資料僅存本機不上傳）＋「創作者：蔡豐全（Mark Tsai）」，比照工作區其他單檔工具（如 `Dashboard/index.html`）的 footer 慣例，但這裡放在設定頁而不是每個畫面都顯示的固定 footer——手機版面寸土寸金，且這個 App 是 hash routing 多畫面 SPA，不像其他工具是單頁工具、footer 只需顯示一次。
 
+## 兩層分類：大分類／子分類（2026-08-17 新增）
+
+`categories` store 新增 `parentId` 欄位：`null`＝大分類，指向另一筆 categories.id＝該大分類底下的子分類。**只支援兩層**（子分類不會再有自己的子分類），`db.js` 的 `archiveCategory`/`deleteCategory` 都是直接找 `parentId===id` 做一層 cascade，沒有寫成遞迴。舊資料（改動前就存在的 IndexedDB 紀錄）沒有 `parentId` 欄位，`listCategories({parentId})` 用 `(c.parentId ?? null)` 相容處理，等同自動把既有分類全部視為大分類——不需要額外的資料庫升版/遷移腳本。
+
+- `DB.listCategories({type, includeArchived, parentId})`：`parentId` 不傳＝不篩層級（回傳大分類＋子分類混在一起，`catById` 這類需要查全部分類的地方用這個）；傳 `null`＝只回傳大分類；傳某筆分類 id＝只回傳它底下的子分類。
+- **封存/刪除大分類會連同底下子分類 cascade**：封存是遞迴標記 `archived=true`（避免「大分類被封存看不到，子分類卻還留在新增選單」的孤兒狀態）；刪除是先刪子分類再刪自己。UI 端（`renderCategories()` 的刪除按鈕）會把父＋子的 `DB.listEntries({category})` 使用數合併算，警告文字會明確告知「會一併刪除底下 N 個子分類」。
+- **`分類管理」畫面（`renderCategories()`）**：依 `type`（支出/收入）各自一個 `.card`，裡面依序是「大分類列＋它底下的子分類列（縮排＋左側層級線 `.cat-manage-row-child`）＋這個大分類專屬的『+ 新增子分類』小表單（`.cat-add-sub`）」，一個大分類接一個大分類往下排。子分類列多一個「移至…」下拉選單（`reparentOptions`，排除自己所屬的大分類），選了就直接把該子分類的 `parentId` 改掉——這是「調整大分類內部的分類」的具體實作。大分類與子分類都有「編輯」按鈕，用兩個接續的 `prompt()`（名稱、emoji）就地修改，不用刪除重建（會遺失 `sortOrder`／`archived` 歷史）。頁面最下方原本的「新增分類」表單改名為「新增大分類」，強制 `parentId: null`。
+- **記帳表單（`buildForm()`/`refreshCategoryChips()`）**：分類 chip 分兩排——第一排永遠是大分類（`chipGrid`），選了大分類就直接把 `draft.category` 設成大分類 id（可直接存檔，子分類是選填的細分）；如果該大分類底下有子分類，第二排（`subChipGrid`）才會出現讓使用者選填更精確的子分類，選了就把 `draft.category` 改成子分類 id。大分類 chip 的「已選取」樣式會在「選了它本身」或「選了它任一個子分類」時都亮起，讓使用者一眼看出目前歸在哪個大分類底下。
+- **列表頁分類篩選 rollup（`renderList()`）**：篩選下拉選單（`buildCategoryFilterOptions()`）大分類在前、子分類縮排（`　└`）跟在後面列出，兩者都可以單獨被選為篩選條件。**篩選大分類時要把底下所有子分類的紀錄也一起算進來**（`matchIds` 集合），不然選「餐飲」卻看不到被記到「早餐」子分類的紀錄，使用者會誤以為資料不見了；篩選子分類則是精確比對。這段 rollup 邏輯特意留在 `app.js`（不是 `db.js` 的 `listEntries()`），因為它需要先知道分類的父子關係才能算，`db.js` 保持通用不耦合這個階層概念。
+- **報表甜甜圈圖 rollup（`renderReports()`）**：圖表固定依「大分類」層級彙總，不會因為使用者把某些紀錄記到子分類就把圖切得更細碎——用新增的 `topCategoryId(catId, catById)` 輔助函式（沿著 `parentId` 往上找到頂層 id）把要送進 `Charts.renderCategoryDonut()` 的 `entries` 逐筆重寫 `category` 欄位成頂層 id，`categories` 參數也只傳大分類清單（給圖表的配色 slot 分配／圖例名稱查詢用）。子分類層級的明細仍看得到——去列表頁用分類篩選挑到子分類即可。
+- **emoji 選擇面板（`buildIconField()`）**：新增大分類／新增子分類／編輯（`prompt()` 版）三處共用同一組 `EMOJI_CHOICES`（約 60 個，涵蓋食衣住行育樂＋收支常見情境）；輸入框旁邊的「選圖示」按鈕點開一個可捲動的 grid（`.emoji-grid`／`.emoji-choice`），點一下 emoji 直接填進輸入框並收合，不用使用者自己打得出特殊符號；輸入框本身仍保留手動輸入能力（emoji 清單畢竟不可能窮舉，想用清單外的符號還是打得進去）。
+- **驗證方式**：本機沒有裝置可用真機測試，改用 `python -m http.server 8784` 起服務＋Chrome 直接對 `window.DB`／DOM 下手（`javascript_tool` 呼叫 `DB.listCategories()`／模擬點擊按鈕），涵蓋：新增大分類／新增子分類（icon 預設繼承父層）／「移至」重新掛靠／`prompt()` 版編輯改名／cascade 封存（父子一起變 `archived:true`）／cascade 刪除（警告文字正確算出子分類數與合併後的使用中紀錄數，刪除後父子都消失、原本用該分類的紀錄正確退回「未分類」不當機）／記帳表單子分類 chip 出現與選取態同步／列表頁依大分類篩選能撈到子分類紀錄（rollup）／報表甜甜圈圖依大分類彙總（子分類紀錄的金額算進母分類那一塊，不會多切一塊）。全程 console 無錯誤。改用 `window.confirm`/`window.prompt` 的 stub 版本（直接回傳 `true`/預設值）繞過原生對話框，避免卡住自動化流程。
+- 改動後已依專案既有規則把 `service-worker.js` 的 `CACHE_NAME` 升版（`v9` → `v10`），否則手機上舊的 Cache Storage 快取不會更新到含新分類管理邏輯的 `js/app.js`／`js/db.js`／`css/app.css`。
+
 ## 已知的範圍縮減（非遺漏，是刻意的取捨）
 
 - 沒有做拍照 OCR 記帳（`source:'receipt-photo'` 欄位有保留但沒實作）——電子發票 QR 掃描已經涵蓋主要情境，OCR 準確度不穩定且需要額外服務。

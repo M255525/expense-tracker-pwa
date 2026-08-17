@@ -9,25 +9,27 @@ const DB_VERSION = 1;
 // categorical palette dynamically per render (see js/charts.js) so two
 // categories never collide when both happen to appear in the same chart,
 // and a chart with >8 active categories folds the smallest into "其他".
+// parentId: null 代表這是「大分類」；非 null（指向另一筆 categories.id）代表這是
+// 某個大分類底下的「子分類」。只支援兩層（子分類不會再有自己的子分類）。
 const DEFAULT_CATEGORIES = [
   // expense
-  { id: 'exp-food', type: 'expense', name: '餐飲', icon: '🍜', sortOrder: 1, isDefault: true, archived: false },
-  { id: 'exp-transport', type: 'expense', name: '交通', icon: '🚗', sortOrder: 2, isDefault: true, archived: false },
-  { id: 'exp-shopping', type: 'expense', name: '購物', icon: '🛍️', sortOrder: 3, isDefault: true, archived: false },
-  { id: 'exp-daily', type: 'expense', name: '日用品', icon: '🧴', sortOrder: 4, isDefault: true, archived: false },
-  { id: 'exp-medical', type: 'expense', name: '醫療', icon: '💊', sortOrder: 5, isDefault: true, archived: false },
-  { id: 'exp-entertainment', type: 'expense', name: '娛樂', icon: '🎬', sortOrder: 6, isDefault: true, archived: false },
-  { id: 'exp-education', type: 'expense', name: '教育', icon: '📚', sortOrder: 7, isDefault: true, archived: false },
-  { id: 'exp-housing', type: 'expense', name: '居住(房租)', icon: '🏠', sortOrder: 8, isDefault: true, archived: false },
-  { id: 'exp-utilities', type: 'expense', name: '水電瓦斯', icon: '💡', sortOrder: 9, isDefault: true, archived: false },
-  { id: 'exp-comm', type: 'expense', name: '通訊', icon: '📱', sortOrder: 10, isDefault: true, archived: false },
-  { id: 'exp-insurance', type: 'expense', name: '保險', icon: '🛡️', sortOrder: 11, isDefault: true, archived: false },
-  { id: 'exp-other', type: 'expense', name: '其他', icon: '📦', sortOrder: 12, isDefault: true, archived: false },
+  { id: 'exp-food', type: 'expense', name: '餐飲', icon: '🍜', sortOrder: 1, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-transport', type: 'expense', name: '交通', icon: '🚗', sortOrder: 2, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-shopping', type: 'expense', name: '購物', icon: '🛍️', sortOrder: 3, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-daily', type: 'expense', name: '日用品', icon: '🧴', sortOrder: 4, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-medical', type: 'expense', name: '醫療', icon: '💊', sortOrder: 5, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-entertainment', type: 'expense', name: '娛樂', icon: '🎬', sortOrder: 6, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-education', type: 'expense', name: '教育', icon: '📚', sortOrder: 7, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-housing', type: 'expense', name: '居住(房租)', icon: '🏠', sortOrder: 8, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-utilities', type: 'expense', name: '水電瓦斯', icon: '💡', sortOrder: 9, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-comm', type: 'expense', name: '通訊', icon: '📱', sortOrder: 10, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-insurance', type: 'expense', name: '保險', icon: '🛡️', sortOrder: 11, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-other', type: 'expense', name: '其他', icon: '📦', sortOrder: 12, isDefault: true, archived: false, parentId: null },
   // income
-  { id: 'inc-salary', type: 'income', name: '薪資', icon: '💰', sortOrder: 1, isDefault: true, archived: false },
-  { id: 'inc-bonus', type: 'income', name: '獎金', icon: '🎁', sortOrder: 2, isDefault: true, archived: false },
-  { id: 'inc-invest', type: 'income', name: '投資收益', icon: '📈', sortOrder: 3, isDefault: true, archived: false },
-  { id: 'inc-other', type: 'income', name: '其他收入', icon: '➕', sortOrder: 4, isDefault: true, archived: false },
+  { id: 'inc-salary', type: 'income', name: '薪資', icon: '💰', sortOrder: 1, isDefault: true, archived: false, parentId: null },
+  { id: 'inc-bonus', type: 'income', name: '獎金', icon: '🎁', sortOrder: 2, isDefault: true, archived: false, parentId: null },
+  { id: 'inc-invest', type: 'income', name: '投資收益', icon: '📈', sortOrder: 3, isDefault: true, archived: false, parentId: null },
+  { id: 'inc-other', type: 'income', name: '其他收入', icon: '➕', sortOrder: 4, isDefault: true, archived: false, parentId: null },
 ];
 
 let _dbPromise = null;
@@ -198,25 +200,31 @@ async function applyPulledEntries(records) {
 
 // ---- categories ----
 
-async function listCategories({ type, includeArchived = false } = {}) {
+// parentId：不傳（undefined）＝不依層級篩選（回傳大分類＋子分類混在一起，供
+// catById 這類需要查全部分類的地方使用）；傳 null＝只回傳大分類；傳某筆分類
+// id＝只回傳該大分類底下的子分類。
+async function listCategories({ type, includeArchived = false, parentId } = {}) {
   const db = await openDB();
   const tx = db.transaction('categories', 'readonly');
   let all = await reqPromise(tx.objectStore('categories').getAll());
   if (!includeArchived) all = all.filter((c) => !c.archived);
   if (type) all = all.filter((c) => c.type === type);
+  if (parentId !== undefined) all = all.filter((c) => (c.parentId ?? null) === parentId);
   all.sort((a, b) => a.sortOrder - b.sortOrder);
   return all;
 }
 
 async function putCategory(category) {
   const db = await openDB();
-  const record = { id: category.id || crypto.randomUUID(), archived: false, sortOrder: 999, ...category };
+  const record = { id: category.id || crypto.randomUUID(), archived: false, sortOrder: 999, parentId: null, ...category };
   const tx = db.transaction('categories', 'readwrite');
   tx.objectStore('categories').put(record);
   await txDone(tx);
   return record;
 }
 
+// 封存大分類時一併封存底下所有子分類（避免「大分類被封存看不到、子分類卻
+// 還留在新增分類的選單裡」這種孤兒狀態）；封存子分類則只影響它自己。
 async function archiveCategory(id) {
   const db = await openDB();
   const tx = db.transaction('categories', 'readwrite');
@@ -225,6 +233,13 @@ async function archiveCategory(id) {
   if (existing) {
     existing.archived = true;
     store.put(existing);
+    const all = await reqPromise(store.getAll());
+    for (const c of all) {
+      if ((c.parentId ?? null) === id && !c.archived) {
+        c.archived = true;
+        store.put(c);
+      }
+    }
   }
   await txDone(tx);
 }
@@ -234,10 +249,16 @@ async function archiveCategory(id) {
 // 不會動那些紀錄，UI 端（entry-icon/entry-title）已經有「分類不存在時顯示
 // 未分類」的容錯，所以就算刪掉還在用的分類也不會壞掉，只是歷史紀錄會變成
 // 未分類，這個取捨要在呼叫端用確認對話框讓使用者知情。
+// 刪除大分類會連同底下的子分類一併刪除（兩層而已，不用遞迴）。
 async function deleteCategory(id) {
   const db = await openDB();
   const tx = db.transaction('categories', 'readwrite');
-  tx.objectStore('categories').delete(id);
+  const store = tx.objectStore('categories');
+  const all = await reqPromise(store.getAll());
+  for (const c of all) {
+    if ((c.parentId ?? null) === id) store.delete(c.id);
+  }
+  store.delete(id);
   await txDone(tx);
 }
 

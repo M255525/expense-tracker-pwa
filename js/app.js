@@ -63,6 +63,51 @@ function weekdayLabel(dateStr) {
   return `週${days[d.getDay()]}`;
 }
 
+// 兩層分類：子分類的 parentId 指向大分類；大分類自己 parentId 是 null。
+// 把任一分類 id 一路往上解析到最頂層大分類 id（用於報表圖表要依大分類彙總時）。
+function topCategoryId(catId, catById) {
+  const c = catById.get(catId);
+  if (!c) return catId;
+  return c.parentId ? topCategoryId(c.parentId, catById) : c.id;
+}
+
+// 分類圖示挑選面板用的常見 emoji（涵蓋食衣住行育樂＋收支常見情境），
+// 比純文字輸入框更好選、也不需要使用者自己打得出特殊符號。
+const EMOJI_CHOICES = [
+  '🍜', '🍔', '🍱', '🍣', '🍕', '🍰', '☕', '🍺', '🥤', '🍎',
+  '🚗', '🚌', '🚕', '🚲', '🛵', '🚄', '✈️', '⛽', '🅿️', '🚿',
+  '🛍️', '👗', '👟', '💄', '🧴', '🧻', '🛒', '🎁', '🧧', '📦',
+  '🏠', '🛋️', '💡', '🔧', '🧹', '🔑', '🛏️',
+  '💊', '🏥', '🦷', '🏋️', '⚽', '🐾',
+  '🎬', '🎮', '🎵', '🎨', '📷', '🎂', '🏖️', '👶', '👴',
+  '📚', '✏️', '🎓',
+  '📱', '💻', '📶', '🛡️',
+  '💰', '📈', '💵', '➕', '🏷️',
+];
+
+// 新增/編輯分類共用的「emoji 輸入框＋選圖示按鈕（點開常見 emoji 網格）」欄位。
+function buildIconField(initialValue) {
+  const iconInput = el('input', { type: 'text', placeholder: 'emoji', value: initialValue || '', style: 'width:56px;text-align:center' });
+  const toggleBtn = el('button', { type: 'button', class: 'icon-picker-toggle' }, ['選圖示']);
+  const grid = el('div', { class: 'emoji-grid' });
+  grid.style.display = 'none';
+  for (const em of EMOJI_CHOICES) {
+    grid.appendChild(el('button', {
+      type: 'button',
+      class: 'emoji-choice',
+      onclick: () => { iconInput.value = em; grid.style.display = 'none'; },
+    }, [em]));
+  }
+  toggleBtn.addEventListener('click', () => {
+    grid.style.display = grid.style.display === 'none' ? 'grid' : 'none';
+  });
+  const wrapper = el('div', { style: 'display:flex;flex-direction:column;gap:6px' }, [
+    el('div', { style: 'display:flex;gap:6px' }, [iconInput, toggleBtn]),
+    grid,
+  ]);
+  return { wrapper, iconInput };
+}
+
 // ---------------- Router ----------------
 
 function parseHash() {
@@ -96,6 +141,26 @@ window.addEventListener('hashchange', render);
 
 // ---------------- List view ----------------
 
+// 分類篩選下拉選單：大分類在前，底下的子分類縮排列在後面（不用 <optgroup>
+// 是因為子分類本身也要能被單獨選取，optgroup label 不能當可選值）。
+function buildCategoryFilterOptions(categories) {
+  const parents = categories.filter((c) => !c.parentId).sort((a, b) => a.sortOrder - b.sortOrder);
+  const childrenOf = new Map();
+  for (const c of categories) {
+    if (c.parentId) {
+      if (!childrenOf.has(c.parentId)) childrenOf.set(c.parentId, []);
+      childrenOf.get(c.parentId).push(c);
+    }
+  }
+  const opts = [];
+  for (const p of parents) {
+    opts.push(el('option', { value: p.id }, [`${p.icon} ${p.name}`]));
+    const kids = (childrenOf.get(p.id) || []).sort((a, b) => a.sortOrder - b.sortOrder);
+    for (const k of kids) opts.push(el('option', { value: k.id }, [`　└ ${k.icon} ${k.name}`]));
+  }
+  return opts;
+}
+
 async function renderList() {
   const categories = await DB.listCategories({ includeArchived: true });
   const catById = new Map(categories.map((c) => [c.id, c]));
@@ -111,7 +176,7 @@ async function renderList() {
   ]);
   const catSel = el('select', { onchange: (e) => { state.category = e.target.value; refresh(); } }, [
     el('option', { value: '' }, ['全部分類']),
-    ...categories.map((c) => el('option', { value: c.id }, [`${c.icon} ${c.name}`])),
+    ...buildCategoryFilterOptions(categories),
   ]);
   const searchInput = el('input', { type: 'text', placeholder: '搜尋商家/備註', oninput: (e) => { state.q = e.target.value.trim(); refresh(); } });
   filterRow.append(typeSel, catSel, searchInput);
@@ -156,7 +221,13 @@ async function renderList() {
   async function refresh() {
     renderSelectionBar();
     listContainer.innerHTML = '';
-    let entries = await DB.listEntries({ type: state.type || undefined, category: state.category || undefined });
+    let entries = await DB.listEntries({ type: state.type || undefined });
+    if (state.category) {
+      // 篩選大分類時要連同底下所有子分類的紀錄一起算進來，不然選「餐飲」
+      // 卻看不到被歸類到「早餐」子分類的紀錄，會讓使用者以為資料不見了。
+      const matchIds = new Set([state.category, ...categories.filter((c) => c.parentId === state.category).map((c) => c.id)]);
+      entries = entries.filter((e) => matchIds.has(e.category));
+    }
     if (state.q) {
       const q = state.q.toLowerCase();
       entries = entries.filter((e) => (e.merchant || '').toLowerCase().includes(q) || (e.note || '').toLowerCase().includes(q));
@@ -268,15 +339,45 @@ function buildForm(host, draft, existing) {
 
   const catField = el('div', { class: 'form-field' }, [el('label', {}, ['分類'])]);
   const chipGrid = el('div', { class: 'chip-grid' });
-  catField.appendChild(chipGrid);
+  const subChipGrid = el('div', { class: 'chip-grid', style: 'margin-top:8px' });
+  catField.append(chipGrid, subChipGrid);
   host.appendChild(catField);
 
+  // 兩層分類：先選大分類（會直接把 draft.category 設成大分類 id，可直接儲存）；
+  // 若該大分類底下有子分類，下方會多一排子分類 chip 供選填，選了子分類就把
+  // draft.category 改成更精確的子分類 id。
   async function refreshCategoryChips() {
     chipGrid.innerHTML = '';
+    subChipGrid.innerHTML = '';
     const cats = await DB.listCategories({ type: draft.type });
+    const catById = new Map(cats.map((c) => [c.id, c]));
+    const parents = cats.filter((c) => !c.parentId);
+    const childrenOf = new Map();
     for (const c of cats) {
-      const chip = el('div', { class: `chip ${draft.category === c.id ? 'selected' : ''}`, onclick: () => { draft.category = c.id; refreshCategoryChips(); } }, [`${c.icon} ${c.name}`]);
-      chipGrid.appendChild(chip);
+      if (c.parentId) {
+        if (!childrenOf.has(c.parentId)) childrenOf.set(c.parentId, []);
+        childrenOf.get(c.parentId).push(c);
+      }
+    }
+
+    for (const c of parents) {
+      const kids = childrenOf.get(c.id) || [];
+      const selected = draft.category === c.id || kids.some((k) => k.id === draft.category);
+      chipGrid.appendChild(el('div', {
+        class: `chip ${selected ? 'selected' : ''}`,
+        onclick: () => { draft.category = c.id; refreshCategoryChips(); },
+      }, [`${c.icon} ${c.name}`]));
+    }
+
+    const cur = catById.get(draft.category);
+    const activeParentId = cur ? (cur.parentId || cur.id) : null;
+    const kids = activeParentId ? (childrenOf.get(activeParentId) || []) : [];
+    subChipGrid.style.display = kids.length ? 'flex' : 'none';
+    for (const k of kids) {
+      subChipGrid.appendChild(el('div', {
+        class: `chip ${draft.category === k.id ? 'selected' : ''}`,
+        onclick: () => { draft.category = k.id; refreshCategoryChips(); },
+      }, [`${k.icon} ${k.name}`]));
     }
   }
   refreshCategoryChips();
@@ -439,50 +540,142 @@ async function renderCategories() {
     for (const type of ['expense', 'income']) {
       wrap.appendChild(el('div', { class: 'section-title' }, [type === 'expense' ? '支出分類' : '收入分類']));
       const cats = await DB.listCategories({ type });
+      const parents = cats.filter((c) => !c.parentId);
+      const childrenOf = new Map();
+      for (const c of cats) {
+        if (c.parentId) {
+          if (!childrenOf.has(c.parentId)) childrenOf.set(c.parentId, []);
+          childrenOf.get(c.parentId).push(c);
+        }
+      }
+
       const listEl = el('div', { class: 'card' });
-      cats.forEach((c, i) => {
-        const row = el('div', { class: 'cat-manage-row' }, [
-          el('span', {}, [c.icon]),
-          el('span', { class: 'cat-name' }, [c.name]),
-          el('button', { onclick: async () => { if (i > 0) { await swapOrder(cats[i - 1], c); refresh(); } } }, ['↑']),
-          el('button', { onclick: async () => { if (i < cats.length - 1) { await swapOrder(cats[i + 1], c); refresh(); } } }, ['↓']),
-          el('button', {
-            onclick: async () => {
-              if (confirm(`封存分類「${c.name}」？（歷史紀錄仍會保留此分類，只是新增時不會再出現在選單裡）`)) { await DB.archiveCategory(c.id); refresh(); }
-            },
-          }, ['封存']),
-          el('button', {
-            onclick: async () => {
-              const inUse = await DB.listEntries({ category: c.id });
-              const warn = inUse.length > 0
-                ? `這個分類還有 ${inUse.length} 筆紀錄在用。刪除後這些紀錄會變成「未分類」，分類本身無法復原，確定要刪除嗎？`
-                : `確定要刪除分類「${c.name}」嗎？此動作無法復原。`;
-              if (confirm(warn)) { await DB.deleteCategory(c.id); toast('已刪除分類'); refresh(); }
-            },
-          }, ['刪除']),
-        ]);
-        listEl.appendChild(row);
+      parents.forEach((p, i) => {
+        const kids = childrenOf.get(p.id) || [];
+        listEl.appendChild(buildCategoryRow(p, {
+          siblings: parents, index: i, children: kids, onChanged: refresh,
+        }));
+        kids.forEach((k, ki) => {
+          listEl.appendChild(buildCategoryRow(k, {
+            siblings: kids, index: ki, indent: true, onChanged: refresh,
+            reparentOptions: parents.filter((other) => other.id !== p.id),
+          }));
+        });
+        listEl.appendChild(buildAddSubForm(p, refresh));
       });
       wrap.appendChild(listEl);
     }
 
     const newForm = el('div', { class: 'card' });
-    const iconInput = el('input', { type: 'text', placeholder: 'emoji', style: 'width:56px;text-align:center' });
-    const nameInput = el('input', { type: 'text', placeholder: '分類名稱', style: 'flex:1' });
+    const { wrapper: iconWrap, iconInput } = buildIconField('');
+    const nameInput = el('input', { type: 'text', placeholder: '大分類名稱', style: 'flex:1' });
     const typeSel = el('select', {}, [el('option', { value: 'expense' }, ['支出']), el('option', { value: 'income' }, ['收入'])]);
-    newForm.appendChild(el('div', { class: 'section-title' }, ['新增分類']));
-    newForm.appendChild(el('div', { style: 'display:flex;gap:8px;margin-bottom:10px' }, [iconInput, nameInput, typeSel]));
+    newForm.appendChild(el('div', { class: 'section-title' }, ['新增大分類']));
+    newForm.appendChild(el('div', { style: 'display:flex;gap:8px;margin-bottom:10px;align-items:flex-start' }, [iconWrap, nameInput, typeSel]));
     newForm.appendChild(el('button', {
       class: 'btn btn-primary',
       onclick: async () => {
         if (!nameInput.value.trim()) { toast('請輸入分類名稱'); return; }
-        const all = await DB.listCategories({ type: typeSel.value });
-        await DB.putCategory({ name: nameInput.value.trim(), icon: iconInput.value.trim() || '🏷️', type: typeSel.value, sortOrder: all.length + 1 });
-        toast('已新增分類');
+        const all = await DB.listCategories({ type: typeSel.value, parentId: null });
+        await DB.putCategory({ name: nameInput.value.trim(), icon: iconInput.value.trim() || '🏷️', type: typeSel.value, parentId: null, sortOrder: all.length + 1 });
+        toast('已新增大分類');
+        nameInput.value = '';
+        iconInput.value = '';
         refresh();
       },
-    }, ['新增']));
+    }, ['新增大分類']));
     wrap.appendChild(newForm);
+  }
+
+  // c：這一列代表的分類（大分類或子分類）。
+  // siblings/index：同一層（同一個大分類底下，或所有大分類）用來排序 ↑↓。
+  // children：只有大分類列會傳，用來讓封存/刪除連同子分類一起處理並顯示正確提示文字。
+  // reparentOptions：只有子分類列會傳，是「移至其他大分類」下拉選單的選項。
+  function buildCategoryRow(c, { siblings, index, children, indent, reparentOptions, onChanged }) {
+    const controls = [
+      el('span', {}, [c.icon]),
+      el('span', { class: 'cat-name' }, [c.name]),
+      el('button', { onclick: async () => { if (index > 0) { await swapOrder(siblings[index - 1], c); onChanged(); } } }, ['↑']),
+      el('button', { onclick: async () => { if (index < siblings.length - 1) { await swapOrder(siblings[index + 1], c); onChanged(); } } }, ['↓']),
+      el('button', {
+        onclick: async () => {
+          const name = prompt('分類名稱', c.name);
+          if (name === null) return;
+          const icon = prompt('emoji 圖示', c.icon);
+          if (icon === null) return;
+          await DB.putCategory({ ...c, name: name.trim() || c.name, icon: icon.trim() || c.icon });
+          toast('已更新');
+          onChanged();
+        },
+      }, ['編輯']),
+    ];
+    if (reparentOptions && reparentOptions.length) {
+      controls.push(el('select', {
+        onchange: async (e) => {
+          if (!e.target.value) return;
+          const target = reparentOptions.find((p) => p.id === e.target.value);
+          await DB.putCategory({ ...c, parentId: e.target.value });
+          toast(`已移到「${target ? target.name : ''}」`);
+          onChanged();
+        },
+      }, [
+        el('option', { value: '' }, ['移至…']),
+        ...reparentOptions.map((p) => el('option', { value: p.id }, [`${p.icon} ${p.name}`])),
+      ]));
+    }
+    controls.push(
+      el('button', {
+        onclick: async () => {
+          const kids = children || [];
+          const hint = kids.length ? `刪除大分類「${c.name}」會一併刪除底下 ${kids.length} 個子分類。` : '';
+          const idsToCheck = [c.id, ...kids.map((k) => k.id)];
+          let inUseCount = 0;
+          for (const cid of idsToCheck) inUseCount += (await DB.listEntries({ category: cid })).length;
+          const warn = hint + (inUseCount > 0
+            ? `目前共有 ${inUseCount} 筆紀錄在用，封存後這些分類不會再出現在新增選單裡，但紀錄仍會保留。確定要封存嗎？`
+            : `確定要封存「${c.name}」嗎？（歷史紀錄仍會保留此分類，只是新增時不會再出現在選單裡）`);
+          if (confirm(warn)) { await DB.archiveCategory(c.id); onChanged(); }
+        },
+      }, ['封存']),
+      el('button', {
+        onclick: async () => {
+          const kids = children || [];
+          const idsToCheck = [c.id, ...kids.map((k) => k.id)];
+          let inUseCount = 0;
+          for (const cid of idsToCheck) inUseCount += (await DB.listEntries({ category: cid })).length;
+          let warn;
+          if (kids.length) {
+            warn = `刪除大分類「${c.name}」會一併刪除底下 ${kids.length} 個子分類。` +
+              (inUseCount > 0 ? `目前共有 ${inUseCount} 筆紀錄在用，刪除後會變成「未分類」。` : '') +
+              '此動作無法復原，確定要刪除嗎？';
+          } else {
+            warn = inUseCount > 0
+              ? `這個分類還有 ${inUseCount} 筆紀錄在用。刪除後這些紀錄會變成「未分類」，分類本身無法復原，確定要刪除嗎？`
+              : `確定要刪除分類「${c.name}」嗎？此動作無法復原。`;
+          }
+          if (confirm(warn)) { await DB.deleteCategory(c.id); toast('已刪除分類'); onChanged(); }
+        },
+      }, ['刪除']),
+    );
+    return el('div', { class: `cat-manage-row${indent ? ' cat-manage-row-child' : ''}` }, controls);
+  }
+
+  function buildAddSubForm(parent, onChanged) {
+    const { wrapper: iconWrap, iconInput } = buildIconField(parent.icon);
+    const nameInput = el('input', { type: 'text', placeholder: '子分類名稱', style: 'flex:1' });
+    const addBtn = el('button', {
+      onclick: async () => {
+        if (!nameInput.value.trim()) { toast('請輸入子分類名稱'); return; }
+        const siblingCount = (await DB.listCategories({ type: parent.type, parentId: parent.id })).length;
+        await DB.putCategory({
+          name: nameInput.value.trim(), icon: iconInput.value.trim() || parent.icon,
+          type: parent.type, parentId: parent.id, sortOrder: siblingCount + 1,
+        });
+        toast('已新增子分類');
+        onChanged();
+      },
+    }, ['+ 新增子分類']);
+    return el('div', { class: 'cat-manage-row cat-manage-row-child cat-add-sub' }, [iconWrap, nameInput, addBtn]);
   }
 
   async function swapOrder(a, b) {
@@ -522,8 +715,15 @@ async function renderReports() {
     kpiRow.appendChild(el('div', { class: 'kpi-tile' }, [el('div', { class: 'label' }, ['支出']), el('div', { class: 'value', style: 'color:var(--critical)' }, [fmtTWD(expense)])]));
     kpiRow.appendChild(el('div', { class: 'kpi-tile' }, [el('div', { class: 'label' }, ['淨額']), el('div', { class: 'value' }, [fmtTWD(income - expense)])]));
 
+    // 甜甜圈圖依「大分類」彙總，不會因為某些紀錄記到子分類就把圖切得更細碎——
+    // 子分類本身仍看得到（列表頁的分類篩選/紀錄明細都能篩到子分類層級）。
     const expenseCats = await DB.listCategories({ type: 'expense', includeArchived: true });
-    Charts.renderCategoryDonut(donutHost, { entries: entries.filter((e) => e.type === 'expense'), categories: expenseCats });
+    const expenseCatById = new Map(expenseCats.map((c) => [c.id, c]));
+    const topExpenseCats = expenseCats.filter((c) => !c.parentId);
+    const expenseEntries = entries
+      .filter((e) => e.type === 'expense')
+      .map((e) => ({ ...e, category: topCategoryId(e.category, expenseCatById) }));
+    Charts.renderCategoryDonut(donutHost, { entries: expenseEntries, categories: topExpenseCats });
 
     const { from: f, to: t } = monthRange(monthInput.value);
     const days = [];
