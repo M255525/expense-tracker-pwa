@@ -85,6 +85,25 @@
 - **驗證方式**：本機沒有裝置可用真機測試，改用 `python -m http.server 8784` 起服務＋Chrome 直接對 `window.DB`／DOM 下手（`javascript_tool` 呼叫 `DB.listCategories()`／模擬點擊按鈕），涵蓋：新增大分類／新增子分類（icon 預設繼承父層）／「移至」重新掛靠／`prompt()` 版編輯改名／cascade 封存（父子一起變 `archived:true`）／cascade 刪除（警告文字正確算出子分類數與合併後的使用中紀錄數，刪除後父子都消失、原本用該分類的紀錄正確退回「未分類」不當機）／記帳表單子分類 chip 出現與選取態同步／列表頁依大分類篩選能撈到子分類紀錄（rollup）／報表甜甜圈圖依大分類彙總（子分類紀錄的金額算進母分類那一塊，不會多切一塊）。全程 console 無錯誤。改用 `window.confirm`/`window.prompt` 的 stub 版本（直接回傳 `true`/預設值）繞過原生對話框，避免卡住自動化流程。
 - 改動後已依專案既有規則把 `service-worker.js` 的 `CACHE_NAME` 升版（`v9` → `v10`），否則手機上舊的 Cache Storage 快取不會更新到含新分類管理邏輯的 `js/app.js`／`js/db.js`／`css/app.css`。
 
+### 分類管理畫面補上「取消封存」（2026-08-18 新增）
+
+原本 `renderCategories()` 的 `refresh()` 用 `DB.listCategories({type})`（未傳 `includeArchived`），封存後的分類會直接從管理畫面消失，沒有任何入口能再看到它或還原——等於「封存」形同「刪不掉但也管不到」的死路，這是使用者實際回報想「對原有新增分類進行管理」時發現的缺口。修法：
+
+- `db.js` 新增 `DB.unarchiveCategory(id)`，跟 `archiveCategory` 對稱：還原大分類時一併還原底下曾被連帶封存的子分類（避免大分類復原了、子分類卻還封存看不到的孤兒狀態）；還原子分類則只影響它自己。
+- `renderCategories()` 改成 `DB.listCategories({type, includeArchived:true})`，已封存的分類會繼續顯示在原本所屬大分類底下（`archived` 是逐筆欄位，不影響父子分組邏輯），列名加註「（已封存）」並用透明度區分。
+- 已封存的列**只留「取消封存」＋「刪除」兩個按鈕**，隱藏 ↑↓ 排序／編輯／移至（因為封存分類已經不在 `siblings`／`reparentOptions` 這些「僅未封存」的清單裡，index 會是 -1，硬留著排序按鈕會誤觸到別的未封存分類）；「新增子分類」小表單也只在大分類未封存時才顯示。
+- 用 `python -m http.server 8784` + `javascript_tool` 直接對 `window.DB` 驗證過：cascade 封存（大分類＋子分類一起 `archived:true`）→ 畫面正確顯示兩列「已封存」＋「取消封存」按鈕 → 點大分類的「取消封存」→ 大分類與子分類一起 `archived:false`、UI 立刻恢復完整控制項（↑↓／編輯／移至／封存／刪除）。全程 console 無錯誤。
+- 已依規則升版 `CACHE_NAME`（`v10` → `v11`）。
+
+### 報表頁每日收支表格常駐顯示 + 修正日期偏移 bug（2026-08-20 新增）
+
+使用者反映「總覽/報表」的每日收支，表格數據要跟略圖（長條圖）吻合、且可查詢。追查後發現兩件事：
+
+- `renderReports()` 組每日資料時用 `cursor.toISOString().slice(0,10)` 取得該天的 ISO 日期字串去比對 `entries`，但 `toISOString()` 是轉成 UTC，而本 App 的目標時區是 Asia/Taipei（UTC+8）——本機測試（時區 Asia/Taipei）驗證到：8/1 的紀錄實際被歸類顯示在標籤「2」底下，全月每一天都對不上（整體偏移 +1 天）。KPI 總額（收入/支出/淨額）因為是直接加總全部 entries、不經過這段逐日迴圈，所以總額本身沒錯，只有「表格分到哪一天」錯了——這也是為什麼使用者會覺得「表格數字」和「略表（KPI/圖表）」對不上。修法是改用跟 `todayISO()`／`currentMonthStr()` 一致的本地時間手動組字串（`getFullYear()`/`getMonth()`/`getDate()`），不再經過 UTC 轉換。
+- `js/charts.js` 的 `renderTrendChart()` 原本把每日表格放在「顯示表格」按鈕後面預設收合（`buildTableToggle()`）。改成 `buildTableToggle(rows, headers, {alwaysVisible:true})`：新增 `alwaysVisible` 選項，`renderTrendChart` 傳 `true` 讓每日表格直接常駐顯示在長條圖下方（可以直接對照查詢，不用多點一下）；`renderCategoryDonut()` 的分類明細表格維持原本「點按鈕才展開」不變，兩者共用同一個 `buildTableToggle()` 函式。
+- 驗證方式：`python -m http.server 8784` + `javascript_tool` 直接 `DB.putEntry()` 塞測試紀錄（8/1 收入500+支出120、8/3 支出80、8/5 支出300）進 IndexedDB，確認 KPI 總額（收入500/支出500）與常駐表格逐日列（標籤1/3/5，不是修法前錯位的2/4/6）完全吻合後，用 `DB.softDeleteEntry()` 清掉測試資料。測試時也踩到專案已知的 SW/HTTP 快取坑（`CACHE_NAME` 升版＋`unregister()`＋清 `caches.keys()` 都做了，畫面仍跑舊碼，最後是子資源 `js/app.js` 被瀏覽器 HTTP 快取卡住，換一個新分頁重新導覽才吃到新版）。
+- 已依規則升版 `CACHE_NAME`（`v11` → `v12`）。
+
 ## 已知的範圍縮減（非遺漏，是刻意的取捨）
 
 - 沒有做拍照 OCR 記帳（`source:'receipt-photo'` 欄位有保留但沒實作）——電子發票 QR 掃描已經涵蓋主要情境，OCR 準確度不穩定且需要額外服務。

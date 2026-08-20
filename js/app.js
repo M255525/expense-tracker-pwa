@@ -539,7 +539,7 @@ async function renderCategories() {
     wrap.innerHTML = '';
     for (const type of ['expense', 'income']) {
       wrap.appendChild(el('div', { class: 'section-title' }, [type === 'expense' ? '支出分類' : '收入分類']));
-      const cats = await DB.listCategories({ type });
+      const cats = await DB.listCategories({ type, includeArchived: true });
       const parents = cats.filter((c) => !c.parentId);
       const childrenOf = new Map();
       for (const c of cats) {
@@ -549,19 +549,21 @@ async function renderCategories() {
         }
       }
 
+      const activeParents = parents.filter((p) => !p.archived);
       const listEl = el('div', { class: 'card' });
-      parents.forEach((p, i) => {
+      parents.forEach((p) => {
         const kids = childrenOf.get(p.id) || [];
+        const activeKids = kids.filter((k) => !k.archived);
         listEl.appendChild(buildCategoryRow(p, {
-          siblings: parents, index: i, children: kids, onChanged: refresh,
+          siblings: activeParents, index: activeParents.indexOf(p), children: kids, onChanged: refresh,
         }));
-        kids.forEach((k, ki) => {
+        kids.forEach((k) => {
           listEl.appendChild(buildCategoryRow(k, {
-            siblings: kids, index: ki, indent: true, onChanged: refresh,
-            reparentOptions: parents.filter((other) => other.id !== p.id),
+            siblings: activeKids, index: activeKids.indexOf(k), indent: true, onChanged: refresh,
+            reparentOptions: activeParents.filter((other) => other.id !== p.id),
           }));
         });
-        listEl.appendChild(buildAddSubForm(p, refresh));
+        if (!p.archived) listEl.appendChild(buildAddSubForm(p, refresh));
       });
       wrap.appendChild(listEl);
     }
@@ -592,24 +594,36 @@ async function renderCategories() {
   // children：只有大分類列會傳，用來讓封存/刪除連同子分類一起處理並顯示正確提示文字。
   // reparentOptions：只有子分類列會傳，是「移至其他大分類」下拉選單的選項。
   function buildCategoryRow(c, { siblings, index, children, indent, reparentOptions, onChanged }) {
+    const nameLabel = c.archived ? `${c.name}（已封存）` : c.name;
     const controls = [
       el('span', {}, [c.icon]),
-      el('span', { class: 'cat-name' }, [c.name]),
-      el('button', { onclick: async () => { if (index > 0) { await swapOrder(siblings[index - 1], c); onChanged(); } } }, ['↑']),
-      el('button', { onclick: async () => { if (index < siblings.length - 1) { await swapOrder(siblings[index + 1], c); onChanged(); } } }, ['↓']),
-      el('button', {
-        onclick: async () => {
-          const name = prompt('分類名稱', c.name);
-          if (name === null) return;
-          const icon = prompt('emoji 圖示', c.icon);
-          if (icon === null) return;
-          await DB.putCategory({ ...c, name: name.trim() || c.name, icon: icon.trim() || c.icon });
-          toast('已更新');
-          onChanged();
-        },
-      }, ['編輯']),
+      el('span', { class: 'cat-name', style: c.archived ? 'opacity:.55' : '' }, [nameLabel]),
     ];
-    if (reparentOptions && reparentOptions.length) {
+    // 封存中的分類已經從新增選單消失、排序對它沒有意義，只留「取消封存」和「刪除」，
+    // 避免 index（此時是 -1，因為 siblings 只含未封存項目）誤觸排序邏輯。
+    if (!c.archived) {
+      controls.push(
+        el('button', { onclick: async () => { if (index > 0) { await swapOrder(siblings[index - 1], c); onChanged(); } } }, ['↑']),
+        el('button', { onclick: async () => { if (index < siblings.length - 1) { await swapOrder(siblings[index + 1], c); onChanged(); } } }, ['↓']),
+        el('button', {
+          onclick: async () => {
+            const name = prompt('分類名稱', c.name);
+            if (name === null) return;
+            const icon = prompt('emoji 圖示', c.icon);
+            if (icon === null) return;
+            await DB.putCategory({ ...c, name: name.trim() || c.name, icon: icon.trim() || c.icon });
+            toast('已更新');
+            onChanged();
+          },
+        }, ['編輯']),
+      );
+    }
+    if (c.archived) {
+      controls.push(el('button', {
+        onclick: async () => { await DB.unarchiveCategory(c.id); toast('已取消封存'); onChanged(); },
+      }, ['取消封存']));
+    }
+    if (!c.archived && reparentOptions && reparentOptions.length) {
       controls.push(el('select', {
         onchange: async (e) => {
           if (!e.target.value) return;
@@ -623,8 +637,8 @@ async function renderCategories() {
         ...reparentOptions.map((p) => el('option', { value: p.id }, [`${p.icon} ${p.name}`])),
       ]));
     }
-    controls.push(
-      el('button', {
+    if (!c.archived) {
+      controls.push(el('button', {
         onclick: async () => {
           const kids = children || [];
           const hint = kids.length ? `刪除大分類「${c.name}」會一併刪除底下 ${kids.length} 個子分類。` : '';
@@ -636,7 +650,9 @@ async function renderCategories() {
             : `確定要封存「${c.name}」嗎？（歷史紀錄仍會保留此分類，只是新增時不會再出現在選單裡）`);
           if (confirm(warn)) { await DB.archiveCategory(c.id); onChanged(); }
         },
-      }, ['封存']),
+      }, ['封存']));
+    }
+    controls.push(
       el('button', {
         onclick: async () => {
           const kids = children || [];
@@ -730,7 +746,7 @@ async function renderReports() {
     let cursor = new Date(f + 'T00:00:00');
     const end = new Date(t + 'T00:00:00');
     while (cursor <= end) {
-      const iso = cursor.toISOString().slice(0, 10);
+      const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
       const dayEntries = entries.filter((e) => e.date === iso);
       days.push({
         label: String(cursor.getDate()),

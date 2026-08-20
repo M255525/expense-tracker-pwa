@@ -232,17 +232,21 @@
     legend.children[1].appendChild(document.createTextNode('支出'));
     container.appendChild(legend);
 
-    container.appendChild(buildTableToggle(points.map((p) => [p.label, fmtTWD(p.income), fmtTWD(p.expense)]), ['期間', '收入', '支出']));
+    container.appendChild(buildTableToggle(points.map((p) => [p.label, fmtTWD(p.income), fmtTWD(p.expense)]), ['期間', '收入', '支出'], { alwaysVisible: true }));
   }
 
-  function buildTableToggle(rows, headers) {
+  function buildTableToggle(rows, headers, { alwaysVisible = false } = {}) {
     const wrap = document.createElement('div');
-    const btn = el('button', { class: 'viz-table-toggle', type: 'button' }, [document.createTextNode('顯示表格')]);
-    const table = el('table', { class: 'viz-table', style: 'display:none' });
+    const table = el('table', { class: 'viz-table', style: alwaysVisible ? '' : 'display:none' });
     const thead = el('thead', {}, [el('tr', {}, headers.map((h) => el('th', {}, [document.createTextNode(h)])))]);
     const tbody = el('tbody', {}, rows.map((r) => el('tr', {}, r.map((c) => el('td', {}, [document.createTextNode(String(c))])))));
     table.appendChild(thead);
     table.appendChild(tbody);
+    if (alwaysVisible) {
+      wrap.appendChild(table);
+      return wrap;
+    }
+    const btn = el('button', { class: 'viz-table-toggle', type: 'button' }, [document.createTextNode('顯示表格')]);
     btn.addEventListener('click', () => {
       const showing = table.style.display !== 'none';
       table.style.display = showing ? 'none' : 'table';

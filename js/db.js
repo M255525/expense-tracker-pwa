@@ -244,6 +244,30 @@ async function archiveCategory(id) {
   await txDone(tx);
 }
 
+// 取消封存：跟 archiveCategory 對稱，還原大分類時一併還原底下曾被連帶封存
+// 的子分類（避免「大分類復原了、子分類卻還是封存看不到」的孤兒狀態）；
+// 還原子分類則只影響它自己。
+async function unarchiveCategory(id) {
+  const db = await openDB();
+  const tx = db.transaction('categories', 'readwrite');
+  const store = tx.objectStore('categories');
+  const existing = await reqPromise(store.get(id));
+  if (existing) {
+    existing.archived = false;
+    store.put(existing);
+    if (!existing.parentId) {
+      const all = await reqPromise(store.getAll());
+      for (const c of all) {
+        if ((c.parentId ?? null) === id && c.archived) {
+          c.archived = false;
+          store.put(c);
+        }
+      }
+    }
+  }
+  await txDone(tx);
+}
+
 // 真的從 categories store 移除（跟 archiveCategory 的隱藏不同）。呼叫前應該
 // 先用 listEntries({category:id}) 檢查還有沒有紀錄在用這個分類——刪除本身
 // 不會動那些紀錄，UI 端（entry-icon/entry-title）已經有「分類不存在時顯示
@@ -291,6 +315,7 @@ window.DB = {
   listCategories,
   putCategory,
   archiveCategory,
+  unarchiveCategory,
   deleteCategory,
   getSetting,
   setSetting,
