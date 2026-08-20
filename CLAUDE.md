@@ -67,6 +67,8 @@
 
 改了 `index.html`／`css/app.css`／`js/app.js` 之後記得比照「Service Worker 快取」一節升版 `CACHE_NAME`（已因這次改動升到 `expense-tracker-v9`）。
 
+**2026-08-20 更新（`Code.gs` 未改動、不需重新部署）**：`render()` 新增 `lastKey`（`JSON.stringify(items)`）比對，內容沒變就不重繪，CSS animation 不再被重置歸零重跑；新增 `appendParsedText()`／`buildTrackContent()` 支援 `[文字](https://...)` 連結語法（`createTextNode` 組 DOM，避免 XSS），資料格式仍是純字串陣列，向下相容。已依規則升版 `CACHE_NAME`（`v12`→`v13`），已 commit＋push（GitHub Pages 自動重新部署）。
+
 ## 設定頁「關於」區塊（2026-08-05 新增）
 
 `js/app.js` 的 `renderSettings()` 最下面新增「關於」卡片：使用警語（僅供個人記帳與教學示範使用、資料僅存本機不上傳）＋「創作者：蔡豐全（Mark Tsai）」，比照工作區其他單檔工具（如 `Dashboard/index.html`）的 footer 慣例，但這裡放在設定頁而不是每個畫面都顯示的固定 footer——手機版面寸土寸金，且這個 App 是 hash routing 多畫面 SPA，不像其他工具是單頁工具、footer 只需顯示一次。
