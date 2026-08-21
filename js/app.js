@@ -830,6 +830,9 @@ async function renderSettings() {
     el('div', { class: 'muted-note' }, ['⚠ 本工具僅供個人記帳與教學示範使用，禁止未經授權公開發布、販售或商業化使用。']),
     el('div', { class: 'muted-note' }, ['⚠ 記帳資料僅存於本機瀏覽器（IndexedDB），不會上傳到任何伺服器；若在公用或共用裝置上使用，離開前請留意保護個人財務資訊。']),
     el('div', { class: 'about-credit' }, ['創作者：蔡豐全（Mark Tsai）']),
+    el('div', { class: 'about-credit' }, [
+      el('img', { src: 'https://visitor-badge.laobi.icu/badge?page_id=m255525.expensetrackerpwa', alt: '訪客次數', style: 'vertical-align:middle;height:20px;' }),
+    ]),
   ]));
 }
 
