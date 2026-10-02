@@ -101,6 +101,7 @@ nav.bottom-nav a.active { color: var(--accent); }
 #marqueeBar { flex: 0 0 auto; height: 28px; background: var(--surface); border-bottom: 1px solid var(--border); overflow: hidden; display: none; align-items: center; }
 #marqueeBar.show { display: flex; }
 #marqueeTrack { display: inline-block; white-space: nowrap; padding-left: 100%; font-size: 12px; font-weight: 600; color: var(--accent); animation: marquee-scroll 30s linear infinite; }
+#marqueeBar:hover #marqueeTrack{animation-play-state:paused}
 @keyframes marquee-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 .card {
