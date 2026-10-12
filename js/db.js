@@ -24,12 +24,22 @@ const DEFAULT_CATEGORIES = [
   { id: 'exp-utilities', type: 'expense', name: '水電瓦斯', icon: '💡', sortOrder: 9, isDefault: true, archived: false, parentId: null },
   { id: 'exp-comm', type: 'expense', name: '通訊', icon: '📱', sortOrder: 10, isDefault: true, archived: false, parentId: null },
   { id: 'exp-insurance', type: 'expense', name: '保險', icon: '🛡️', sortOrder: 11, isDefault: true, archived: false, parentId: null },
-  { id: 'exp-other', type: 'expense', name: '其他', icon: '📦', sortOrder: 12, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-loan', type: 'expense', name: '貸款', icon: '🏦', sortOrder: 12, isDefault: true, archived: false, parentId: null },
+  { id: 'exp-loan-borrow', type: 'expense', name: '借款', icon: '🏦', sortOrder: 1, isDefault: true, archived: false, parentId: 'exp-loan' },
+  { id: 'exp-loan-creditcard', type: 'expense', name: '信用卡卡費', icon: '💳', sortOrder: 2, isDefault: true, archived: false, parentId: 'exp-loan' },
+  { id: 'exp-other', type: 'expense', name: '其他', icon: '📦', sortOrder: 13, isDefault: true, archived: false, parentId: null },
   // income
   { id: 'inc-salary', type: 'income', name: '薪資', icon: '💰', sortOrder: 1, isDefault: true, archived: false, parentId: null },
   { id: 'inc-bonus', type: 'income', name: '獎金', icon: '🎁', sortOrder: 2, isDefault: true, archived: false, parentId: null },
   { id: 'inc-invest', type: 'income', name: '投資收益', icon: '📈', sortOrder: 3, isDefault: true, archived: false, parentId: null },
   { id: 'inc-other', type: 'income', name: '其他收入', icon: '➕', sortOrder: 4, isDefault: true, archived: false, parentId: null },
+];
+
+// 後來才加進預設清單的分類：既有使用者的 categories store 不是空的、不會重跑
+// seedDefaultCategories，所以開 DB 時補一次。用 settings 旗標記錄「補過了」，
+// 之後使用者自己刪掉/封存這些分類也不會被硬塞回來。
+const CATEGORY_MIGRATIONS = [
+  { flag: 'migratedLoanCategories', ids: ['exp-loan', 'exp-loan-borrow', 'exp-loan-creditcard'] },
 ];
 
 let _dbPromise = null;
@@ -66,8 +76,13 @@ function openDB() {
       const tx = db.transaction('categories', 'readonly');
       const countReq = tx.objectStore('categories').count();
       countReq.onsuccess = async () => {
-        if (countReq.result === 0) {
-          await seedDefaultCategories(db);
+        try {
+          if (countReq.result === 0) {
+            await seedDefaultCategories(db);
+          }
+          await applyCategoryMigrations(db, countReq.result === 0);
+        } catch (err) {
+          console.warn('category migration failed', err);
         }
         resolve(db);
       };
@@ -86,6 +101,46 @@ function seedDefaultCategories(db) {
     for (const cat of DEFAULT_CATEGORIES) store.put(cat);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+// freshSeed=true 時預設清單已含這些分類，只需把旗標寫上。
+// 補進既有資料時，大分類排在現有同類型大分類的最後面，不打亂使用者自訂的順序。
+function applyCategoryMigrations(db, freshSeed) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['categories', 'settings'], 'readwrite');
+    const catStore = tx.objectStore('categories');
+    const setStore = tx.objectStore('settings');
+    const allReq = catStore.getAll();
+    allReq.onsuccess = () => {
+      const existing = allReq.result;
+      const existingIds = new Set(existing.map((c) => c.id));
+      for (const m of CATEGORY_MIGRATIONS) {
+        const flagReq = setStore.get(m.flag);
+        flagReq.onsuccess = () => {
+          if (flagReq.result && flagReq.result.value) return;
+          if (!freshSeed) {
+            for (const id of m.ids) {
+              if (existingIds.has(id)) continue;
+              const def = DEFAULT_CATEGORIES.find((c) => c.id === id);
+              if (!def) continue;
+              const cat = { ...def };
+              if (cat.parentId === null) {
+                const maxOrder = existing
+                  .filter((c) => c.type === cat.type && (c.parentId ?? null) === null)
+                  .reduce((mx, c) => Math.max(mx, c.sortOrder || 0), 0);
+                cat.sortOrder = maxOrder + 1;
+              }
+              catStore.put(cat);
+            }
+          }
+          setStore.put({ key: m.flag, value: true });
+        };
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
 }
 

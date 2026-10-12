@@ -106,6 +106,10 @@
 - 驗證方式：`python -m http.server 8784` + `javascript_tool` 直接 `DB.putEntry()` 塞測試紀錄（8/1 收入500+支出120、8/3 支出80、8/5 支出300）進 IndexedDB，確認 KPI 總額（收入500/支出500）與常駐表格逐日列（標籤1/3/5，不是修法前錯位的2/4/6）完全吻合後，用 `DB.softDeleteEntry()` 清掉測試資料。測試時也踩到專案已知的 SW/HTTP 快取坑（`CACHE_NAME` 升版＋`unregister()`＋清 `caches.keys()` 都做了，畫面仍跑舊碼，最後是子資源 `js/app.js` 被瀏覽器 HTTP 快取卡住，換一個新分頁重新導覽才吃到新版）。
 - 已依規則升版 `CACHE_NAME`（`v11` → `v12`）。
 
+### 預設分類新增「貸款」（2026-10-12）
+
+`DEFAULT_CATEGORIES` 新增支出大分類「貸款」(`exp-loan`)＋子分類「借款」(`exp-loan-borrow`)、「信用卡卡費」(`exp-loan-creditcard`)，排在「其他」之前（其他改 sortOrder 13）。**既有使用者的 categories store 非空、不會重跑 `seedDefaultCategories`**，所以 `db.js` 新增 `CATEGORY_MIGRATIONS` + `applyCategoryMigrations()`：開 DB 時檢查 settings 旗標（`migratedLoanCategories`），沒補過就把缺的分類寫入（大分類 sortOrder 接在現有同類型大分類最後面，不打亂使用者自訂順序）並寫上旗標——之後使用者自己刪掉這些分類也不會被硬塞回來。以後要再加預設分類，比照在 `CATEGORY_MIGRATIONS` 加一筆新旗標即可。已升版 `CACHE_NAME`（`v14`→`v15`）。
+
 ## 已知的範圍縮減（非遺漏，是刻意的取捨）
 
 - 沒有做拍照 OCR 記帳（`source:'receipt-photo'` 欄位有保留但沒實作）——電子發票 QR 掃描已經涵蓋主要情境，OCR 準確度不穩定且需要額外服務。
